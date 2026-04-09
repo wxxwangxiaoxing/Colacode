@@ -1,7 +1,10 @@
 package com.colacode.auth.application.controller;
 
+import com.colacode.auth.application.dto.CreateRoleDTO;
+import com.colacode.auth.application.dto.DeleteRoleDTO;
 import com.colacode.auth.application.dto.RoleDTO;
 import com.colacode.auth.application.dto.UnassignRoleDTO;
+import com.colacode.auth.application.dto.UpdateRoleDTO;
 import com.colacode.auth.application.dto.UserRoleDTO;
 import com.colacode.auth.domain.bo.RoleBO;
 import com.colacode.auth.domain.service.RoleDomainService;
@@ -66,7 +69,7 @@ public class RoleController {
     }
 
     @PostMapping("/add")
-    public Result<Void> addRole(@RequestBody RoleDTO roleDTO) {
+    public Result<Void> addRole(@Valid @RequestBody CreateRoleDTO roleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
         RoleBO roleBO = new RoleBO();
         roleBO.setRoleName(roleDTO.getRoleName());
@@ -77,7 +80,7 @@ public class RoleController {
     }
 
     @PostMapping("/assign")
-    public Result<Void> assignRoleToUser(@RequestBody UserRoleDTO userRoleDTO) {
+    public Result<Void> assignRoleToUser(@Valid @RequestBody UserRoleDTO userRoleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
         roleDomainService.assignRoleToUser(userRoleDTO.getUserId(), userRoleDTO.getRoleId());
         return Result.success();
@@ -91,11 +94,8 @@ public class RoleController {
     }
 
     @PostMapping("/update")
-    public Result<Void> updateRole(@RequestBody RoleDTO roleDTO) {
+    public Result<Void> updateRole(@Valid @RequestBody UpdateRoleDTO roleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
-        if (roleDTO.getId() == null) {
-            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "角色ID不能为空");
-        }
         RoleBO roleBO = new RoleBO();
         roleBO.setId(roleDTO.getId());
         roleBO.setRoleName(roleDTO.getRoleName());
@@ -106,11 +106,8 @@ public class RoleController {
     }
 
     @PostMapping("/delete")
-    public Result<Void> deleteRole(@RequestBody RoleDTO roleDTO) {
+    public Result<Void> deleteRole(@Valid @RequestBody DeleteRoleDTO roleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
-        if (roleDTO.getId() == null) {
-            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "角色ID不能为空");
-        }
         roleDomainService.deleteRole(roleDTO.getId());
         return Result.success();
     }

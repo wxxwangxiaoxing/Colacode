@@ -4,7 +4,21 @@ server:
 spring:
   application:
     name: colacode-gateway
+  config:
+    import:
+      - 'optional:nacos:common-redis.yaml'
   cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:${SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR:10.0.20.25:8848}}
+        namespace: ${NACOS_NAMESPACE:${SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE:dev}}
+        group: ${NACOS_GROUP:${SPRING_CLOUD_NACOS_DISCOVERY_GROUP:DEFAULT_GROUP}}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:${SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR:10.0.20.25:8848}}
+        namespace: ${NACOS_NAMESPACE:${SPRING_CLOUD_NACOS_CONFIG_NAMESPACE:dev}}
+        group: ${NACOS_GROUP:${SPRING_CLOUD_NACOS_CONFIG_GROUP:DEFAULT_GROUP}}
+        import-check:
+          enabled: false
     sentinel:
       transport:
         dashboard: 127.0.0.1:8080
@@ -18,13 +32,6 @@ spring:
     gateway:
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin
-
-  data:
-    redis:
-      host: 127.0.0.1
-      port: 6379
-      password:
-      database: 1
 
 sa-token:
   token-name: satoken

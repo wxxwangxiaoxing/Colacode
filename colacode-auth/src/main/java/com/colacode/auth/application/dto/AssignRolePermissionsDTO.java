@@ -7,13 +7,12 @@ import java.io.Serializable;
 import java.util.List;
 
 @Data
-public class UserRoleDTO implements Serializable {
+public class AssignRolePermissionsDTO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @NotNull(message = "用户ID不能为空")
-    private Long userId;
-
     @NotNull(message = "角色ID不能为空")
     private Long roleId;
+
+    private List<Long> permissionIds;
 }

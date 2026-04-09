@@ -20,7 +20,8 @@ public enum ResultCodeEnum {
     CURRENT_USER_DISABLE_FORBIDDEN(400, 40003, "不能禁用当前登录用户"),
     LAST_ADMIN_DELETE_FORBIDDEN(400, 40004, "至少保留一个管理员账号"),
     LAST_ADMIN_DISABLE_FORBIDDEN(400, 40005, "至少保留一个启用中的管理员账号"),
-    LOGIN_FAILED(400, 40006, "用户名或密码错误");
+    LOGIN_FAILED(400, 40006, "用户名或密码错误"),
+    OLD_PASSWORD_INCORRECT(400, 40007, "旧密码错误");
 
     private final int httpStatus;
     private final int code;

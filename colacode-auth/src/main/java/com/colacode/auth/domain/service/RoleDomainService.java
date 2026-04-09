@@ -1,7 +1,6 @@
 package com.colacode.auth.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.colacode.auth.config.AdminAuthorizationProperties;
 import com.colacode.auth.domain.bo.RoleBO;
 import com.colacode.auth.infra.entity.AuthRole;
 import com.colacode.auth.infra.entity.AuthRolePermission;
@@ -10,10 +9,12 @@ import com.colacode.auth.infra.mapper.AuthRoleMapper;
 import com.colacode.auth.infra.mapper.AuthRolePermissionMapper;
 import com.colacode.auth.infra.mapper.AuthUserMapper;
 import com.colacode.auth.infra.mapper.AuthUserRoleMapper;
+import com.colacode.auth.support.AdminUserProtectionSupport;
 import com.colacode.common.enums.ResultCodeEnum;
 import com.colacode.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,18 +27,18 @@ public class RoleDomainService {
     private final AuthUserMapper authUserMapper;
     private final AuthUserRoleMapper authUserRoleMapper;
     private final AuthRolePermissionMapper authRolePermissionMapper;
-    private final AdminAuthorizationProperties adminAuthorizationProperties;
+    private final AdminUserProtectionSupport adminUserProtectionSupport;
 
     public RoleDomainService(AuthRoleMapper authRoleMapper,
                              AuthUserMapper authUserMapper,
                              AuthUserRoleMapper authUserRoleMapper,
                              AuthRolePermissionMapper authRolePermissionMapper,
-                             AdminAuthorizationProperties adminAuthorizationProperties) {
+                             AdminUserProtectionSupport adminUserProtectionSupport) {
         this.authRoleMapper = authRoleMapper;
         this.authUserMapper = authUserMapper;
         this.authUserRoleMapper = authUserRoleMapper;
         this.authRolePermissionMapper = authRolePermissionMapper;
-        this.adminAuthorizationProperties = adminAuthorizationProperties;
+        this.adminUserProtectionSupport = adminUserProtectionSupport;
     }
 
     public List<RoleBO> getRolesByUserId(Long userId) {
@@ -83,6 +84,7 @@ public class RoleDomainService {
         }).collect(Collectors.toList());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void addRole(RoleBO roleBO) {
         AuthRole role = new AuthRole();
         role.setRoleName(roleBO.getRoleName());
@@ -99,13 +101,31 @@ public class RoleDomainService {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void assignRoleToUser(Long userId, Long roleId) {
+        if (userId == null || authUserMapper.selectById(userId) == null) {
+            throw new BusinessException(ResultCodeEnum.USER_NOT_FOUND);
+        }
+        AuthRole role = authRoleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException(ResultCodeEnum.NOT_FOUND, "角色不存在");
+        }
+
+        LambdaQueryWrapper<AuthUserRole> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AuthUserRole::getUserId, userId)
+                .eq(AuthUserRole::getRoleId, roleId);
+        List<AuthUserRole> existingUserRoles = authUserRoleMapper.selectList(wrapper);
+        if (!existingUserRoles.isEmpty()) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "用户已分配该角色");
+        }
+
         AuthUserRole userRole = new AuthUserRole();
         userRole.setUserId(userId);
         userRole.setRoleId(roleId);
         authUserRoleMapper.insert(userRole);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void unassignRoleFromUser(Long userId, Long roleId) {
         if (userId == null || authUserMapper.selectById(userId) == null) {
             throw new BusinessException(ResultCodeEnum.USER_NOT_FOUND);
@@ -118,18 +138,24 @@ public class RoleDomainService {
         LambdaQueryWrapper<AuthUserRole> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AuthUserRole::getUserId, userId)
                 .eq(AuthUserRole::getRoleId, roleId);
-        AuthUserRole existing = authUserRoleMapper.selectOne(wrapper);
-        if (existing == null) {
+        List<AuthUserRole> existingUserRoles = authUserRoleMapper.selectList(wrapper);
+        if (existingUserRoles.isEmpty()) {
             throw new BusinessException(ResultCodeEnum.NOT_FOUND, "用户未分配该角色");
         }
 
-        if (isAdminRole(role.getRoleKey()) && countAdminUsersExcluding(userId, true) < 1) {
+        boolean adminUser = adminUserProtectionSupport.isAdminUser(userId);
+        if (adminUser
+                && !adminUserProtectionSupport.willRemainAdminAfterUnassign(userId, roleId)
+                && adminUserProtectionSupport.countAdminUsersExcluding(userId, true) < 1) {
             throw new BusinessException(ResultCodeEnum.LAST_ADMIN_DISABLE_FORBIDDEN);
         }
 
-        authUserRoleMapper.deleteById(existing.getId());
+        for (AuthUserRole existingUserRole : existingUserRoles) {
+            authUserRoleMapper.deleteById(existingUserRole.getId());
+        }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void assignPermissionsToRole(Long roleId, List<Long> permissionIds) {
         LambdaQueryWrapper<AuthRolePermission> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(AuthRolePermission::getRoleId, roleId);
@@ -145,7 +171,9 @@ public class RoleDomainService {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void deleteRole(Long roleId) {
+        adminUserProtectionSupport.assertRoleDeleteKeepsEnabledAdmin(roleId);
         authRoleMapper.deleteById(roleId);
 
         LambdaQueryWrapper<AuthRolePermission> permWrapper = new LambdaQueryWrapper<>();
@@ -157,7 +185,9 @@ public class RoleDomainService {
         authUserRoleMapper.delete(userRoleWrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateRole(RoleBO roleBO) {
+        adminUserProtectionSupport.assertRoleChangeKeepsEnabledAdmin(roleBO.getId(), roleBO.getRoleKey(), roleBO.getPermissionIds());
         AuthRole role = new AuthRole();
         role.setId(roleBO.getId());
         role.setRoleName(roleBO.getRoleName());
@@ -167,18 +197,5 @@ public class RoleDomainService {
         if (roleBO.getPermissionIds() != null) {
             assignPermissionsToRole(roleBO.getId(), roleBO.getPermissionIds());
         }
-    }
-
-    private boolean isAdminRole(String roleKey) {
-        return adminAuthorizationProperties.getRoleKeys() != null
-                && adminAuthorizationProperties.getRoleKeys().contains(roleKey);
-    }
-
-    private long countAdminUsersExcluding(Long excludeUserId, boolean enabledOnly) {
-        return authUserMapper.countAdminUsers(
-                adminAuthorizationProperties.getRoleKeys(),
-                adminAuthorizationProperties.getPermissionKeys(),
-                excludeUserId,
-                enabledOnly);
     }
 }

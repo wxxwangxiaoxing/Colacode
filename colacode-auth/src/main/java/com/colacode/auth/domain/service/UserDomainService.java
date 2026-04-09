@@ -2,11 +2,11 @@ package com.colacode.auth.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.colacode.auth.config.AdminAuthorizationProperties;
 import com.colacode.auth.domain.bo.UserBO;
 import com.colacode.auth.domain.converter.UserBOConverter;
 import com.colacode.auth.infra.entity.AuthUser;
 import com.colacode.auth.infra.mapper.AuthUserMapper;
+import com.colacode.auth.support.AdminUserProtectionSupport;
 import com.colacode.auth.support.LoginSecurityService;
 import com.colacode.common.PageResult;
 import com.colacode.common.enums.ResultCodeEnum;
@@ -25,16 +25,16 @@ public class UserDomainService {
 
     private final AuthUserMapper authUserMapper;
     private final PasswordEncoder passwordEncoder;
-    private final AdminAuthorizationProperties adminAuthorizationProperties;
+    private final AdminUserProtectionSupport adminUserProtectionSupport;
     private final LoginSecurityService loginSecurityService;
 
     public UserDomainService(AuthUserMapper authUserMapper,
                              PasswordEncoder passwordEncoder,
-                             AdminAuthorizationProperties adminAuthorizationProperties,
+                             AdminUserProtectionSupport adminUserProtectionSupport,
                              LoginSecurityService loginSecurityService) {
         this.authUserMapper = authUserMapper;
         this.passwordEncoder = passwordEncoder;
-        this.adminAuthorizationProperties = adminAuthorizationProperties;
+        this.adminUserProtectionSupport = adminUserProtectionSupport;
         this.loginSecurityService = loginSecurityService;
     }
 
@@ -133,7 +133,7 @@ public class UserDomainService {
 
         AuthUser existingUser = authUserMapper.selectById(userId);
         if (!matchesPassword(oldPassword, existingUser.getPassword())) {
-            throw new BusinessException(ResultCodeEnum.LOGIN_FAILED);
+            throw new BusinessException(ResultCodeEnum.OLD_PASSWORD_INCORRECT);
         }
 
         validatePasswordStrength(newPassword);
@@ -223,28 +223,11 @@ public class UserDomainService {
     }
 
     private boolean isAdminUser(Long userId) {
-        List<String> roleKeys = getRolesByUserId(userId);
-        for (String roleKey : adminAuthorizationProperties.getRoleKeys()) {
-            if (roleKeys.contains(roleKey)) {
-                return true;
-            }
-        }
-
-        List<String> permissionKeys = getPermissionsByUserId(userId);
-        for (String permissionKey : adminAuthorizationProperties.getPermissionKeys()) {
-            if (permissionKeys.contains(permissionKey)) {
-                return true;
-            }
-        }
-        return false;
+        return adminUserProtectionSupport.isAdminUser(userId);
     }
 
     private long countAdminUsersExcluding(Long excludeUserId, boolean enabledOnly) {
-        return authUserMapper.countAdminUsers(
-                adminAuthorizationProperties.getRoleKeys(),
-                adminAuthorizationProperties.getPermissionKeys(),
-                excludeUserId,
-                enabledOnly);
+        return adminUserProtectionSupport.countAdminUsersExcluding(excludeUserId, enabledOnly);
     }
 
     private String encodePasswordIfNecessary(String password) {

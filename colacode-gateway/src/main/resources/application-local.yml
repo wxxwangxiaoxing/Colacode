@@ -1,12 +1,13 @@
 server:
   port: ${BOOT3_SERVER_PORT:5000}
 
-spring:
+spring:
   application:
     name: colacode-gateway-boot3
   cloud:
     nacos:
       config:
+        enabled: false
         import-check:
           enabled: false
       discovery:
@@ -25,13 +26,6 @@ spring:
           response-body: '{"code":429,"message":"请求太频繁，请稍后再试"}'
   main:
     web-application-type: reactive
-  data:
-    redis:
-      host: ${BOOT3_REDIS_HOST:127.0.0.1}
-      port: ${BOOT3_REDIS_PORT:6379}
-      password: ${BOOT3_REDIS_PASSWORD:}
-      database: ${BOOT3_REDIS_DATABASE:0}
-      timeout: 5s
 
 gateway:
   routes:
