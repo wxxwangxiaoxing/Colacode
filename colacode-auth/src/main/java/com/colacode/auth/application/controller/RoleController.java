@@ -1,6 +1,7 @@
 package com.colacode.auth.application.controller;
 
 import com.colacode.auth.application.dto.RoleDTO;
+import com.colacode.auth.application.dto.UnassignRoleDTO;
 import com.colacode.auth.application.dto.UserRoleDTO;
 import com.colacode.auth.domain.bo.RoleBO;
 import com.colacode.auth.domain.service.RoleDomainService;
@@ -8,6 +9,7 @@ import com.colacode.auth.support.AdminAuthorizationSupport;
 import com.colacode.common.Result;
 import com.colacode.common.enums.ResultCodeEnum;
 import com.colacode.common.exception.BusinessException;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,6 +50,21 @@ public class RoleController {
         return Result.success(roleDTOList);
     }
 
+    @GetMapping("/all")
+    public Result<List<RoleDTO>> listAllRoles() {
+        adminAuthorizationSupport.assertAdminAccess();
+        List<RoleBO> roleBOList = roleDomainService.listAllRoles();
+        List<RoleDTO> roleDTOList = roleBOList.stream().map(bo -> {
+            RoleDTO dto = new RoleDTO();
+            dto.setId(bo.getId());
+            dto.setRoleName(bo.getRoleName());
+            dto.setRoleKey(bo.getRoleKey());
+            dto.setPermissionIds(bo.getPermissionIds());
+            return dto;
+        }).collect(Collectors.toList());
+        return Result.success(roleDTOList);
+    }
+
     @PostMapping("/add")
     public Result<Void> addRole(@RequestBody RoleDTO roleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
@@ -63,6 +80,13 @@ public class RoleController {
     public Result<Void> assignRoleToUser(@RequestBody UserRoleDTO userRoleDTO) {
         adminAuthorizationSupport.assertAdminAccess();
         roleDomainService.assignRoleToUser(userRoleDTO.getUserId(), userRoleDTO.getRoleId());
+        return Result.success();
+    }
+
+    @PostMapping("/unassign")
+    public Result<Void> unassignRoleFromUser(@Valid @RequestBody UnassignRoleDTO unassignRoleDTO) {
+        adminAuthorizationSupport.assertAdminAccess();
+        roleDomainService.unassignRoleFromUser(unassignRoleDTO.getUserId(), unassignRoleDTO.getRoleId());
         return Result.success();
     }
 

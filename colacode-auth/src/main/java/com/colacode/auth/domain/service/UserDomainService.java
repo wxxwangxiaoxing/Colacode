@@ -113,6 +113,36 @@ public class UserDomainService {
         authUserMapper.updateById(entity);
     }
 
+    public void changePassword(Long userId, String oldPassword, String newPassword, String confirmPassword) {
+        assertUserExists(userId);
+        if (!StringUtils.hasText(oldPassword)) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "旧密码不能为空");
+        }
+        if (!StringUtils.hasText(newPassword)) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "新密码不能为空");
+        }
+        if (!StringUtils.hasText(confirmPassword)) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "确认密码不能为空");
+        }
+        if (!newPassword.equals(confirmPassword)) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "两次输入的新密码不一致");
+        }
+        if (oldPassword.equals(newPassword)) {
+            throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "新密码不能与旧密码相同");
+        }
+
+        AuthUser existingUser = authUserMapper.selectById(userId);
+        if (!matchesPassword(oldPassword, existingUser.getPassword())) {
+            throw new BusinessException(ResultCodeEnum.LOGIN_FAILED);
+        }
+
+        validatePasswordStrength(newPassword);
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        authUserMapper.updateById(user);
+    }
+
     public PageResult<UserBO> listUsers(int pageNo, int pageSize) {
         Page<AuthUser> page = new Page<>(pageNo, pageSize);
         Page<AuthUser> result = authUserMapper.selectPage(page, null);

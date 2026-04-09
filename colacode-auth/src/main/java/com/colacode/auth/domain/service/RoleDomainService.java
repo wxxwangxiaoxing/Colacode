@@ -1,13 +1,17 @@
 package com.colacode.auth.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.colacode.auth.config.AdminAuthorizationProperties;
 import com.colacode.auth.domain.bo.RoleBO;
 import com.colacode.auth.infra.entity.AuthRole;
 import com.colacode.auth.infra.entity.AuthRolePermission;
 import com.colacode.auth.infra.entity.AuthUserRole;
 import com.colacode.auth.infra.mapper.AuthRoleMapper;
 import com.colacode.auth.infra.mapper.AuthRolePermissionMapper;
+import com.colacode.auth.infra.mapper.AuthUserMapper;
 import com.colacode.auth.infra.mapper.AuthUserRoleMapper;
+import com.colacode.common.enums.ResultCodeEnum;
+import com.colacode.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -19,15 +23,21 @@ import java.util.stream.Collectors;
 public class RoleDomainService {
 
     private final AuthRoleMapper authRoleMapper;
+    private final AuthUserMapper authUserMapper;
     private final AuthUserRoleMapper authUserRoleMapper;
     private final AuthRolePermissionMapper authRolePermissionMapper;
+    private final AdminAuthorizationProperties adminAuthorizationProperties;
 
     public RoleDomainService(AuthRoleMapper authRoleMapper,
+                             AuthUserMapper authUserMapper,
                              AuthUserRoleMapper authUserRoleMapper,
-                             AuthRolePermissionMapper authRolePermissionMapper) {
+                             AuthRolePermissionMapper authRolePermissionMapper,
+                             AdminAuthorizationProperties adminAuthorizationProperties) {
         this.authRoleMapper = authRoleMapper;
+        this.authUserMapper = authUserMapper;
         this.authUserRoleMapper = authUserRoleMapper;
         this.authRolePermissionMapper = authRolePermissionMapper;
+        this.adminAuthorizationProperties = adminAuthorizationProperties;
     }
 
     public List<RoleBO> getRolesByUserId(Long userId) {
@@ -41,6 +51,23 @@ public class RoleDomainService {
         }
 
         List<AuthRole> roles = authRoleMapper.selectBatchIds(roleIds);
+        return roles.stream().map(role -> {
+            RoleBO bo = new RoleBO();
+            bo.setId(role.getId());
+            bo.setRoleName(role.getRoleName());
+            bo.setRoleKey(role.getRoleKey());
+
+            LambdaQueryWrapper<AuthRolePermission> permWrapper = new LambdaQueryWrapper<>();
+            permWrapper.eq(AuthRolePermission::getRoleId, role.getId());
+            List<AuthRolePermission> rolePerms = authRolePermissionMapper.selectList(permWrapper);
+            bo.setPermissionIds(rolePerms.stream().map(AuthRolePermission::getPermissionId).collect(Collectors.toList()));
+
+            return bo;
+        }).collect(Collectors.toList());
+    }
+
+    public List<RoleBO> listAllRoles() {
+        List<AuthRole> roles = authRoleMapper.selectList(null);
         return roles.stream().map(role -> {
             RoleBO bo = new RoleBO();
             bo.setId(role.getId());
@@ -77,6 +104,30 @@ public class RoleDomainService {
         userRole.setUserId(userId);
         userRole.setRoleId(roleId);
         authUserRoleMapper.insert(userRole);
+    }
+
+    public void unassignRoleFromUser(Long userId, Long roleId) {
+        if (userId == null || authUserMapper.selectById(userId) == null) {
+            throw new BusinessException(ResultCodeEnum.USER_NOT_FOUND);
+        }
+        AuthRole role = authRoleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException(ResultCodeEnum.NOT_FOUND, "角色不存在");
+        }
+
+        LambdaQueryWrapper<AuthUserRole> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AuthUserRole::getUserId, userId)
+                .eq(AuthUserRole::getRoleId, roleId);
+        AuthUserRole existing = authUserRoleMapper.selectOne(wrapper);
+        if (existing == null) {
+            throw new BusinessException(ResultCodeEnum.NOT_FOUND, "用户未分配该角色");
+        }
+
+        if (isAdminRole(role.getRoleKey()) && countAdminUsersExcluding(userId, true) < 1) {
+            throw new BusinessException(ResultCodeEnum.LAST_ADMIN_DISABLE_FORBIDDEN);
+        }
+
+        authUserRoleMapper.deleteById(existing.getId());
     }
 
     public void assignPermissionsToRole(Long roleId, List<Long> permissionIds) {
@@ -116,5 +167,18 @@ public class RoleDomainService {
         if (roleBO.getPermissionIds() != null) {
             assignPermissionsToRole(roleBO.getId(), roleBO.getPermissionIds());
         }
+    }
+
+    private boolean isAdminRole(String roleKey) {
+        return adminAuthorizationProperties.getRoleKeys() != null
+                && adminAuthorizationProperties.getRoleKeys().contains(roleKey);
+    }
+
+    private long countAdminUsersExcluding(Long excludeUserId, boolean enabledOnly) {
+        return authUserMapper.countAdminUsers(
+                adminAuthorizationProperties.getRoleKeys(),
+                adminAuthorizationProperties.getPermissionKeys(),
+                excludeUserId,
+                enabledOnly);
     }
 }

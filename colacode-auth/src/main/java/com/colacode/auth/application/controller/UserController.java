@@ -2,6 +2,7 @@ package com.colacode.auth.application.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.colacode.auth.application.converter.UserDTOConverter;
+import com.colacode.auth.application.dto.ChangePasswordDTO;
 import com.colacode.auth.application.dto.ChangeUserStatusDTO;
 import com.colacode.auth.application.dto.LoginDTO;
 import com.colacode.auth.application.dto.RegisterUserDTO;
@@ -16,6 +17,7 @@ import com.colacode.common.enums.ResultCodeEnum;
 import com.colacode.common.exception.BusinessException;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -57,6 +59,13 @@ public class UserController {
         return Result.success(UserDTOConverter.INSTANCE.convertToDTO(userBO));
     }
 
+    @GetMapping("/{userId}")
+    public Result<UserDTO> getUserById(@PathVariable Long userId) {
+        adminAuthorizationSupport.assertCanAccessUser(userId);
+        UserBO userBO = userDomainService.getUserById(userId);
+        return Result.success(UserDTOConverter.INSTANCE.convertToDTO(userBO));
+    }
+
     @PostMapping("/add")
     public Result<Void> addUser(@RequestBody UserDTO userDTO) {
         adminAuthorizationSupport.assertAdminAccess();
@@ -76,6 +85,13 @@ public class UserController {
         adminAuthorizationSupport.assertCanAccessUser(userDTO.getId());
         UserBO userBO = UserDTOConverter.INSTANCE.convertToBO(userDTO);
         userDomainService.updateUser(userBO);
+        return Result.success();
+    }
+
+    @PostMapping("/changePassword")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordDTO changePasswordDTO) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        userDomainService.changePassword(userId, changePasswordDTO.getOldPassword(), changePasswordDTO.getNewPassword(), changePasswordDTO.getConfirmPassword());
         return Result.success();
     }
 
