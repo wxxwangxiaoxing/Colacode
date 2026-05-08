@@ -66,19 +66,64 @@ public class JudgeAiAnalysisService {
         updateAiResult(submissionId, AI_STATUS_RUNNING, null);
         try {
             AiJudgeAnalysisReqDTO reqDTO = buildRequest(submission);
-            Result<AiJudgeAnalysisRespDTO> response = aiFeignClient.analyse(reqDTO);
-            String feedback = response == null || response.getData() == null
-                    ? null
-                    : response.getData().getFeedback();
-            if (response == null || !response.isSuccess() || !StringUtils.hasText(feedback)) {
-                throw new IllegalStateException(response == null ? "AI service returned null response"
-                        : response.getMessage());
-            }
+            Result<AiJudgeAnalysisRespDTO> response = callAiWithRetry(reqDTO, submissionId);
+            String feedback = response.getData().getFeedback();
             updateAiResult(submissionId, AI_STATUS_SUCCESS, limitFeedback(feedback));
             log.info("AI judge analysis completed, submissionId={}", submissionId);
         } catch (Exception e) {
             log.warn("AI judge analysis failed, submissionId={}", submissionId, e);
             updateAiResult(submissionId, AI_STATUS_FAILED, limitFeedback("AI 分析未完成: " + rootMessage(e)));
+        }
+    }
+
+    private Result<AiJudgeAnalysisRespDTO> callAiWithRetry(AiJudgeAnalysisReqDTO reqDTO, Long submissionId) {
+        int maxAttempts = Math.max(1, judgeProperties.getAi().getMaxAttempts());
+        Exception lastException = null;
+        Result<AiJudgeAnalysisRespDTO> lastResponse = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Result<AiJudgeAnalysisRespDTO> response = aiFeignClient.analyse(reqDTO);
+                if (isUsableResponse(response)) {
+                    if (attempt > 1) {
+                        log.info("AI judge analysis retry succeeded, submissionId={}, attempt={}", submissionId, attempt);
+                    }
+                    return response;
+                }
+                lastResponse = response;
+                log.warn("AI judge analysis returned unusable response, submissionId={}, attempt={}, message={}",
+                        submissionId, attempt, response == null ? "null" : response.getMessage());
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("AI judge analysis call failed, submissionId={}, attempt={}", submissionId, attempt, e);
+            }
+            sleepBeforeRetry(attempt, maxAttempts);
+        }
+        if (lastException != null) {
+            throw new IllegalStateException("AI service call failed after " + maxAttempts + " attempts", lastException);
+        }
+        throw new IllegalStateException(lastResponse == null ? "AI service returned null response" : lastResponse.getMessage());
+    }
+
+    private boolean isUsableResponse(Result<AiJudgeAnalysisRespDTO> response) {
+        return response != null
+                && response.isSuccess()
+                && response.getData() != null
+                && StringUtils.hasText(response.getData().getFeedback());
+    }
+
+    private void sleepBeforeRetry(int attempt, int maxAttempts) {
+        if (attempt >= maxAttempts) {
+            return;
+        }
+        Long retryDelayMs = judgeProperties.getAi().getRetryDelayMs();
+        if (retryDelayMs == null || retryDelayMs <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(retryDelayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("AI retry interrupted", e);
         }
     }
 

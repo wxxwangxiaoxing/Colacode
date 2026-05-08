@@ -66,11 +66,16 @@ judge:
   max-code-length: ${BOOT3_JUDGE_MAX_CODE_LENGTH:65536}
   max-submit-per-minute: ${BOOT3_JUDGE_MAX_SUBMIT_PER_MINUTE:20}
   submit-cooldown-seconds: ${BOOT3_JUDGE_SUBMIT_COOLDOWN_SECONDS:5}
+  run:
+    max-run-per-minute: ${BOOT3_JUDGE_RUN_MAX_PER_MINUTE:60}
+    cooldown-seconds: ${BOOT3_JUDGE_RUN_COOLDOWN_SECONDS:2}
   ai:
     enabled: ${BOOT3_JUDGE_AI_ENABLED:false}
     include-accepted: ${BOOT3_JUDGE_AI_INCLUDE_ACCEPTED:false}
     max-code-context-length: ${BOOT3_JUDGE_AI_MAX_CODE_CONTEXT_LENGTH:6000}
     max-feedback-length: ${BOOT3_JUDGE_AI_MAX_FEEDBACK_LENGTH:4000}
+    max-attempts: ${BOOT3_JUDGE_AI_MAX_ATTEMPTS:2}
+    retry-delay-ms: ${BOOT3_JUDGE_AI_RETRY_DELAY_MS:300}
   languages:
     java: ${BOOT3_JUDGE_LANG_JAVA:62}
     python: ${BOOT3_JUDGE_LANG_PYTHON:71}

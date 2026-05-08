@@ -20,31 +20,57 @@ public class JudgeSecurityService {
     }
 
     public void assertSubmissionAllowed(Long userId, Long subjectId, String code) {
+        assertCodeAllowed(code);
+        assertMinuteLimit(
+                "judge:submit:minute:" + userId,
+                judgeProperties.getMaxSubmitPerMinute(),
+                "提交过于频繁，请稍后再试");
+        assertCooldown(
+                "judge:submit:cooldown:" + userId + ":" + subjectId,
+                judgeProperties.getSubmitCooldownSeconds(),
+                "同一题目提交过于频繁，请稍后再试");
+    }
+
+    public void assertSampleRunAllowed(Long userId, Long subjectId, String code) {
+        assertCodeAllowed(code);
+        assertMinuteLimit(
+                "judge:run:minute:" + userId,
+                judgeProperties.getRun().getMaxRunPerMinute(),
+                "运行过于频繁，请稍后再试");
+        assertCooldown(
+                "judge:run:cooldown:" + userId + ":" + subjectId,
+                judgeProperties.getRun().getCooldownSeconds(),
+                "同一题目运行过于频繁，请稍后再试");
+    }
+
+    private void assertCodeAllowed(String code) {
         if (code == null || code.isBlank()) {
             throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "代码不能为空");
         }
         if (code.length() > judgeProperties.getMaxCodeLength()) {
             throw new BusinessException(ResultCodeEnum.BAD_REQUEST, "代码长度超出限制");
         }
+    }
 
-        String minuteKey = "judge:submit:minute:" + userId;
-        Long count = stringRedisTemplate.opsForValue().increment(minuteKey);
+    private void assertMinuteLimit(String key, Integer limit, String errorMessage) {
+        Long count = stringRedisTemplate.opsForValue().increment(key);
         if (count != null && count == 1L) {
-            stringRedisTemplate.expire(minuteKey, 60, TimeUnit.SECONDS);
+            stringRedisTemplate.expire(key, 60, TimeUnit.SECONDS);
         }
-        if (count != null && count > judgeProperties.getMaxSubmitPerMinute()) {
-            throw new BusinessException(ResultCodeEnum.TOO_MANY_REQUESTS, "提交过于频繁，请稍后再试");
+        if (count != null && limit != null && count > limit) {
+            throw new BusinessException(ResultCodeEnum.TOO_MANY_REQUESTS, errorMessage);
         }
+    }
 
-        String cooldownKey = "judge:submit:cooldown:" + userId + ":" + subjectId;
-        Boolean existed = stringRedisTemplate.hasKey(cooldownKey);
+    private void assertCooldown(String key, Integer cooldownSeconds, String errorMessage) {
+        Boolean existed = stringRedisTemplate.hasKey(key);
         if (Boolean.TRUE.equals(existed)) {
-            throw new BusinessException(ResultCodeEnum.TOO_MANY_REQUESTS, "同一题目提交过于频繁，请稍后再试");
+            throw new BusinessException(ResultCodeEnum.TOO_MANY_REQUESTS, errorMessage);
         }
         stringRedisTemplate.opsForValue().set(
-                cooldownKey,
+                key,
                 "1",
-                judgeProperties.getSubmitCooldownSeconds(),
+                cooldownSeconds,
                 TimeUnit.SECONDS);
     }
 }

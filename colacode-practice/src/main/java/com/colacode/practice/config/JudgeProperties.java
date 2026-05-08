@@ -24,7 +24,17 @@ public class JudgeProperties {
 
     private Map<String, Integer> languages = new LinkedHashMap<>();
 
+    private RunProperties run = new RunProperties();
+
     private AiProperties ai = new AiProperties();
+
+    @Data
+    public static class RunProperties {
+
+        private Integer maxRunPerMinute = 60;
+
+        private Integer cooldownSeconds = 2;
+    }
 
     @Data
     public static class AiProperties {
@@ -36,5 +46,9 @@ public class JudgeProperties {
         private Integer maxCodeContextLength = 6000;
 
         private Integer maxFeedbackLength = 4000;
+
+        private Integer maxAttempts = 2;
+
+        private Long retryDelayMs = 300L;
     }
 }

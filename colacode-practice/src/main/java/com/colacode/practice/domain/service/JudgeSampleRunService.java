@@ -27,18 +27,22 @@ public class JudgeSampleRunService {
     private final Judge0Client judge0Client;
     private final JudgeOutputComparator judgeOutputComparator;
     private final JudgeProperties judgeProperties;
+    private final JudgeSecurityService judgeSecurityService;
 
     public JudgeSampleRunService(SubjectFeignClient subjectFeignClient,
                                  Judge0Client judge0Client,
                                  JudgeOutputComparator judgeOutputComparator,
-                                 JudgeProperties judgeProperties) {
+                                 JudgeProperties judgeProperties,
+                                 JudgeSecurityService judgeSecurityService) {
         this.subjectFeignClient = subjectFeignClient;
         this.judge0Client = judge0Client;
         this.judgeOutputComparator = judgeOutputComparator;
         this.judgeProperties = judgeProperties;
+        this.judgeSecurityService = judgeSecurityService;
     }
 
     public JudgeRunSampleResultDTO runSample(Long userId, Long subjectId, String language, String code) {
+        judgeSecurityService.assertSampleRunAllowed(userId, subjectId, code);
         Integer languageId = resolveLanguageId(language);
 
         Result<SubjectCodeJudgeDetailDTO> result = subjectFeignClient.queryJudgeDetail(subjectId);

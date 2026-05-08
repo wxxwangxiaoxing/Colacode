@@ -55,6 +55,12 @@ set BOOT3_AI_URL=http://127.0.0.1:3020
 # 判题 AI 分析（可选）
 set BOOT3_JUDGE_AI_ENABLED=false
 set BOOT3_JUDGE_AI_INCLUDE_ACCEPTED=false
+set BOOT3_JUDGE_AI_MAX_ATTEMPTS=2
+set BOOT3_JUDGE_AI_RETRY_DELAY_MS=300
+
+# 样例运行限流（可选）
+set BOOT3_JUDGE_RUN_MAX_PER_MINUTE=60
+set BOOT3_JUDGE_RUN_COOLDOWN_SECONDS=2
 ```
 
 ## 快速开始
@@ -62,8 +68,13 @@ set BOOT3_JUDGE_AI_INCLUDE_ACCEPTED=false
 ### 1. 初始化数据库
 
 ```bash
-mysql -u root -p < doc/sql/colacode-init.sql
+mysql -u root -p colacode < doc/infrastructure/sql/colacode-init.sql
+mysql -u root -p colacode < doc/infrastructure/sql/seed-oj-minimal-problem.sql
 ```
+
+如果只想看更完整的 SQL 导入说明，参考：
+
+- `doc/infrastructure/sql/README.md`
 
 ### 2. 编译公共模块
 
