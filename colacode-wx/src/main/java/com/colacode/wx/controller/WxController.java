@@ -47,8 +47,16 @@ public class WxController {
 
     @PostMapping(produces = "application/xml;charset=utf-8")
     @Operation(summary = "处理微信消息", description = "接收并处理微信消息")
-    public String handleMessage(@RequestBody String xmlData) {
+    public String handleMessage(@RequestBody String xmlData,
+                                @RequestParam("signature") String signature,
+                                @RequestParam("timestamp") String timestamp,
+                                @RequestParam("nonce") String nonce) {
         log.info("收到微信消息: {}", xmlData);
+
+        if (!WxSignatureUtil.checkSignature(token, signature, timestamp, nonce)) {
+            log.warn("微信消息签名验证失败");
+            return "success";
+        }
 
         WxMessage wxMessage = WxXmlUtil.xmlToMessage(xmlData);
         WxMessageHandler handler = handlerFactory.getHandler(wxMessage.getMsgType(), wxMessage.getEvent());
